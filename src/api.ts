@@ -3,10 +3,10 @@ import { defineOperationApi } from '@directus/extensions-sdk';
 type Options = {
 	service: FirebaseService;
 	method: string;
-	auth?: string;
-	resource?: string;
-	secondaryResource?: string;
-	payload?: string;
+	auth?: string | Record<string, unknown>;
+	resource?: string | number;
+	secondaryResource?: string | number;
+	payload?: string | Record<string, unknown> | Record<string, unknown>[];
 };
 
 type FirebaseService = 'firestore' | 'messaging' | 'storage' | 'remoteConfig';
@@ -48,11 +48,11 @@ const FCM_BASE_URL = 'https://fcm.googleapis.com/v1';
 const REMOTE_CONFIG_BASE_URL = 'https://firebaseremoteconfig.googleapis.com/v1';
 const STORAGE_BASE_URL = 'https://storage.googleapis.com/storage/v1';
 
-function parseJson<T>(value: T | string | undefined | null, fieldName: string): T | undefined {
+function parseJson<T>(value: unknown, fieldName: string): T | undefined {
 	if (value === undefined || value === null) return undefined;
 
 	if (typeof value !== 'string') {
-		return value;
+		return value as T;
 	}
 
 	if (value.trim() === '') return undefined;
@@ -84,7 +84,7 @@ function readCredentialsFromEnv(): Partial<ServiceAccountShape> {
 	return credentials;
 }
 
-function resolveCredentials(auth: string | undefined): ServiceAccountShape {
+function resolveCredentials(auth: string | Record<string, unknown> | undefined): ServiceAccountShape {
 	const provided = parseJson<Partial<ServiceAccountShape>>(auth, 'Auth JSON') ?? {};
 	const merged = {
 		...readCredentialsFromEnv(),
@@ -107,6 +107,22 @@ function requireResource(resource: string | undefined, label = 'Resource'): stri
 	}
 
 	return resource;
+}
+
+function normalizeOptionalString(value: string | number | undefined): string | undefined {
+	if (value === undefined) return undefined;
+	if (typeof value === 'string') return value.trim() === '' ? undefined : value.trim();
+	return String(value);
+}
+
+function normalizeRequiredString(value: string | number | undefined, label = 'Resource'): string {
+	const normalized = normalizeOptionalString(value);
+
+	if (!normalized) {
+		throw new Error(`${label} is required for this Firebase call.`);
+	}
+
+	return normalized;
 }
 
 function stringToBytes(value: string): number[] {
@@ -336,7 +352,7 @@ async function executeFirestoreMethod(options: Options, credentials: ServiceAcco
 	const accessToken = await getAccessToken(credentials, ['https://www.googleapis.com/auth/datastore']);
 	const projectId = credentials.project_id;
 	const payload = parseJson<JsonObject | Record<string, unknown>>(options.payload, 'Payload JSON');
-	const resource = options.resource?.trim();
+	const resource = normalizeOptionalString(options.resource);
 	const url = resource ? firestoreDocumentUrl(projectId, resource) : undefined;
 
 	switch (options.method) {
@@ -348,7 +364,7 @@ async function executeFirestoreMethod(options: Options, credentials: ServiceAcco
 		case 'create': {
 			if (!payload || Array.isArray(payload)) throw new Error('Payload JSON is required for Firestore create.');
 			const parentPath = requireResource(resource, 'Collection path');
-			const documentId = typeof options.secondaryResource === 'string' && options.secondaryResource.trim() !== '' ? options.secondaryResource.trim() : undefined;
+			const documentId = normalizeOptionalString(options.secondaryResource);
 			const query = documentId ? `?documentId=${encodeURIComponent(documentId)}` : '';
 			const response = await authorizedRequest(`${firestoreDocumentsBaseUrl(projectId)}/${parentPath}${query}`, accessToken, {
 				method: 'POST',
@@ -429,24 +445,30 @@ async function executeMessagingMethod(options: Options, credentials: ServiceAcco
 	switch (options.method) {
 		case 'send': {
 			if (!payload) throw new Error('Payload JSON is required for Messaging send.');
+			const message = typeof payload === 'object' && !Array.isArray(payload) && payload.message && typeof payload.message === 'object'
+				? (payload.message as Record<string, unknown>)
+				: payload;
 			const response = await authorizedRequest(
 				`${FCM_BASE_URL}/projects/${credentials.project_id}/messages:send`,
 				accessToken,
 				{
 					method: 'POST',
-					body: { message: payload, validate_only: validateOnly },
+					body: { message, validate_only: validateOnly },
 				},
 			);
 			return ensureJsonObject(response.data, 'Messaging send response');
 		}
 		case 'sendValidate': {
 			if (!payload) throw new Error('Payload JSON is required for Messaging sendValidate.');
+			const message = typeof payload === 'object' && !Array.isArray(payload) && payload.message && typeof payload.message === 'object'
+				? (payload.message as Record<string, unknown>)
+				: payload;
 			const response = await authorizedRequest(
 				`${FCM_BASE_URL}/projects/${credentials.project_id}/messages:send`,
 				accessToken,
 				{
 					method: 'POST',
-					body: { message: payload, validate_only: true },
+					body: { message, validate_only: true },
 				},
 			);
 			return ensureJsonObject(response.data, 'Messaging validate response');
@@ -530,7 +552,7 @@ async function executeRemoteConfigMethod(options: Options, credentials: ServiceA
 			};
 		}
 		case 'rollback': {
-			const version = requireResource(options.resource, 'Version number');
+			const version = normalizeRequiredString(options.resource, 'Version number');
 			const response = await authorizedRequest(`${REMOTE_CONFIG_BASE_URL}/projects/${credentials.project_id}/remoteConfig:rollback`, accessToken, {
 				method: 'POST',
 				body: { versionNumber: version },
@@ -547,8 +569,8 @@ async function executeRemoteConfigMethod(options: Options, credentials: ServiceA
 async function executeStorageMethod(options: Options, credentials: ServiceAccountShape) {
 	const accessToken = await getAccessToken(credentials, ['https://www.googleapis.com/auth/devstorage.full_control']);
 	const payload = parseJson<Record<string, unknown>>(options.payload, 'Payload JSON');
-	const bucket = requireResource(options.secondaryResource, 'Secondary Resource (bucket name)');
-	const objectName = options.resource?.trim();
+	const bucket = normalizeRequiredString(options.secondaryResource, 'Secondary Resource (bucket name)');
+	const objectName = normalizeOptionalString(options.resource);
 	const encodedObjectName = objectName ? encodeURIComponent(objectName) : undefined;
 	const url = encodedObjectName ? `${STORAGE_BASE_URL}/b/${bucket}/o/${encodedObjectName}` : undefined;
 
