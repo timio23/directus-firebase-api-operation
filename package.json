@@ -1,0 +1,74 @@
+{
+	"name": "@timio23/directus-firebase-api-operation",
+	"description": "Please enter a description for your extension",
+	"icon": "extension",
+	"version": "1.0.0",
+	"author": "Tim Butterfield",
+	"contributors": [
+		{
+			"name": "Tim Butterfield",
+			"email": "tim.butterfield@me.com",
+			"url": "https://www.npmjs.com/~timio23"
+		}
+	],
+	"license": "MIT",
+	"keywords": [
+		"directus",
+		"directus-extension",
+		"directus-extension-operation",
+		"firebase",
+		"google",
+		"sdk"
+	],
+	"type": "module",
+	"files": [
+		"dist"
+	],
+	"directus:extension": {
+		"type": "operation",
+		"path": {
+			"app": "dist/app.js",
+			"api": "dist/api.js"
+		},
+		"source": {
+			"app": "src/app.ts",
+			"api": "src/api.ts"
+		},
+		"sandbox": {
+			"enabled": true,
+			"requestedScopes": {
+				"request": {
+					"urls": [
+						"https://oauth2.googleapis.com/token",
+						"https://firestore.googleapis.com/v1/*",
+						"https://fcm.googleapis.com/v1/*",
+						"https://firebaseremoteconfig.googleapis.com/v1/*",
+						"https://storage.googleapis.com/storage/v1/*"
+					],
+					"methods": [
+						"GET",
+						"POST",
+						"PATCH",
+						"PUT",
+						"DELETE"
+					]
+				},
+				"log": {},
+				"sleep": {}
+			}
+		},
+		"host": "^10.10.0"
+	},
+	"scripts": {
+		"build": "directus-extension build",
+		"dev": "directus-extension build -w --no-minify",
+		"link": "directus-extension link",
+		"validate": "directus-extension validate"
+	},
+	"devDependencies": {
+		"@directus/extensions-sdk": "18.0.1",
+		"@types/node": "^26.1.1",
+		"typescript": "^7.0.2",
+		"vue": "^3.5.39"
+	}
+}
