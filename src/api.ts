@@ -1,5 +1,6 @@
 import type { SandboxOperationConfig, SandboxRequestResponse } from 'directus:api';
 import { log, request } from 'directus:api';
+import forge from 'node-forge';
 
 type Options = {
 	service: FirebaseService;
@@ -104,40 +105,90 @@ function requireResource(resource: string | undefined, label = 'Resource'): stri
 	return resource;
 }
 
+function utf8Encode(value: string): Uint8Array {
+	const bytes: number[] = [];
+
+	for (let index = 0; index < value.length; index += 1) {
+		let codePoint = value.charCodeAt(index);
+
+		if (codePoint >= 0xd800 && codePoint <= 0xdbff && index + 1 < value.length) {
+			const nextCodePoint = value.charCodeAt(index + 1);
+
+			if (nextCodePoint >= 0xdc00 && nextCodePoint <= 0xdfff) {
+				codePoint = ((codePoint - 0xd800) << 10) + (nextCodePoint - 0xdc00) + 0x10000;
+				index += 1;
+			}
+		}
+
+		if (codePoint <= 0x7f) {
+			bytes.push(codePoint);
+		} else if (codePoint <= 0x7ff) {
+			bytes.push(0xc0 | (codePoint >> 6), 0x80 | (codePoint & 0x3f));
+		} else if (codePoint <= 0xffff) {
+			bytes.push(0xe0 | (codePoint >> 12), 0x80 | ((codePoint >> 6) & 0x3f), 0x80 | (codePoint & 0x3f));
+		} else {
+			bytes.push(
+				0xf0 | (codePoint >> 18),
+				0x80 | ((codePoint >> 12) & 0x3f),
+				0x80 | ((codePoint >> 6) & 0x3f),
+				0x80 | (codePoint & 0x3f),
+			);
+		}
+	}
+
+	return Uint8Array.from(bytes);
+}
+
 function stringToBytes(value: string): number[] {
-	return Array.from(new TextEncoder().encode(value));
+	return Array.from(utf8Encode(value));
+}
+
+const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+function base64Encode(bytes: Uint8Array): string {
+	let output = '';
+
+	for (let index = 0; index < bytes.length; index += 3) {
+		const byte1 = bytes[index]!;
+		const byte2 = bytes[index + 1];
+		const byte3 = bytes[index + 2];
+		const chunk = (byte1 << 16) | ((byte2 ?? 0) << 8) | (byte3 ?? 0);
+
+		output += BASE64_ALPHABET[(chunk >> 18) & 0x3f];
+		output += BASE64_ALPHABET[(chunk >> 12) & 0x3f];
+		output += typeof byte2 === 'number' ? BASE64_ALPHABET[(chunk >> 6) & 0x3f] : '=';
+		output += typeof byte3 === 'number' ? BASE64_ALPHABET[chunk & 0x3f] : '=';
+	}
+
+	return output;
+}
+
+function toFormUrlEncoded(values: Record<string, string>): string {
+	return Object.entries(values)
+		.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+		.join('&');
 }
 
 function bytesToBase64Url(bytes: Uint8Array): string {
-	let binary = '';
-
-	for (const byte of bytes) {
-		binary += String.fromCharCode(byte);
-	}
-
-	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
+	return base64Encode(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
 }
 
-async function signJwt(unsignedToken: string, privateKeyPem: string): Promise<string> {
-	const pemContents = privateKeyPem
-		.replace('-----BEGIN PRIVATE KEY-----', '')
-		.replace('-----END PRIVATE KEY-----', '')
-		.replace(/\s+/g, '');
+function signJwt(unsignedToken: string, privateKeyPem: string): string {
+	let privateKey: forge.pki.rsa.PrivateKey;
 
-	const keyBytes = Uint8Array.from(atob(pemContents), (char) => char.charCodeAt(0));
-	const cryptoKey = await crypto.subtle.importKey(
-		'pkcs8',
-		keyBytes.buffer,
-		{
-			name: 'RSASSA-PKCS1-v1_5',
-			hash: 'SHA-256',
-		},
-		false,
-		['sign'],
-	);
+	try {
+		privateKey = forge.pki.privateKeyFromPem(privateKeyPem) as forge.pki.rsa.PrivateKey;
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Unknown private key parsing error';
+		throw new Error(`Failed to parse Firebase service account private key. ${message}`);
+	}
 
-	const signatureBuffer = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, new Uint8Array(stringToBytes(unsignedToken)));
-	return `${unsignedToken}.${bytesToBase64Url(new Uint8Array(signatureBuffer))}`;
+	const md = forge.md.sha256.create();
+	md.update(unsignedToken, 'utf8');
+	const signature = privateKey.sign(md);
+	const signatureBytes = Uint8Array.from(Array.from(signature as string, (char) => char.charCodeAt(0)));
+
+	return `${unsignedToken}.${bytesToBase64Url(signatureBytes)}`;
 }
 
 async function getAccessToken(credentials: ServiceAccountShape, scopes: string[]): Promise<string> {
@@ -157,11 +208,11 @@ async function getAccessToken(credentials: ServiceAccountShape, scopes: string[]
 			),
 		),
 	);
-	const assertion = await signJwt(`${header}.${payload}`, credentials.private_key);
-	const body = new URLSearchParams({
+	const assertion = signJwt(`${header}.${payload}`, credentials.private_key);
+	const body = toFormUrlEncoded({
 		grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
 		assertion,
-	}).toString();
+	});
 
 	const response = await request(GOOGLE_OAUTH_TOKEN_URL, {
 		method: 'POST',

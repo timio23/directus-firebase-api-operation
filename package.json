@@ -2,7 +2,7 @@
 	"name": "@timio23/directus-firebase-api-operation",
 	"description": "Please enter a description for your extension",
 	"icon": "extension",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"author": "Tim Butterfield",
 	"contributors": [
 		{
@@ -68,7 +68,11 @@
 	"devDependencies": {
 		"@directus/extensions-sdk": "18.0.1",
 		"@types/node": "^26.1.1",
+		"@types/node-forge": "^1.3.14",
 		"typescript": "^7.0.2",
 		"vue": "^3.5.39"
+	},
+	"dependencies": {
+		"node-forge": "^1.4.0"
 	}
 }
