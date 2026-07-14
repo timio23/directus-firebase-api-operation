@@ -1,6 +1,6 @@
 # Directus Firebase API Operation
 
-A Directus operation extension that exposes a sandbox-safe subset of Firebase APIs inside Directus Flows using outbound HTTP requests.
+A Directus operation extension that exposes Firebase APIs inside Directus Flows.
 
 ## Supported services
 
@@ -20,7 +20,7 @@ This operation lets you:
 5. optionally provide a JSON payload
 6. return the Firebase API response back to the flow
 
-The operation is intentionally generic so it stays simple, future-proof, and marketplace-compatible with Directus sandboxing.
+The operation is intentionally generic so it stays simple and future-proof.
 
 ## Installation
 
