@@ -55,7 +55,7 @@ function parseJson<T>(value: unknown, fieldName: string): T | undefined {
 		return value as T;
 	}
 
-	if (value.trim() === '') return undefined;
+	if (typeof value === 'string' && value.trim() === '') return undefined;
 
 	try {
 		return JSON.parse(value) as T;
