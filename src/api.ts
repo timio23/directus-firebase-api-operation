@@ -21,7 +21,7 @@ type ServiceAccountShape = {
 	client_id: string;
 	auth_uri: string;
 	token_uri: string;
-	provider_x509_cert_url: string;
+	auth_provider_x509_cert_url: string;
 	client_x509_cert_url: string;
 	universe_domain: string;
 };
@@ -38,7 +38,7 @@ const envCredentialMap = {
 	client_id: 'FIREBASE_SDK_AUTH_CLIENT_ID',
 	auth_uri: 'FIREBASE_SDK_AUTH_AUTH_URI',
 	token_uri: 'FIREBASE_SDK_AUTH_TOKEN_URI',
-	provider_x509_cert_url: 'FIREBASE_SDK_AUTH_PROVIDER_X509_CERT_URL',
+	auth_provider_x509_cert_url: 'FIREBASE_SDK_AUTH_PROVIDER_X509_CERT_URL',
 	client_x509_cert_url: 'FIREBASE_SDK_AUTH_CLIENT_X509_CERT_URL',
 	universe_domain: 'FIREBASE_SDK_AUTH_UNIVERSAL_DOMAIN',
 } as const;

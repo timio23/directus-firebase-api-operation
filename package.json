@@ -2,7 +2,7 @@
 	"name": "@timio23/directus-firebase-api-operation",
 	"description": "Please enter a description for your extension",
 	"icon": "extension",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"author": "Tim Butterfield",
 	"contributors": [
 		{
