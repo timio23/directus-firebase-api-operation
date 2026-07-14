@@ -1,4 +1,4 @@
-# Directus Firebase Operation
+# Directus Firebase API Operation
 
 A Directus operation extension that exposes a sandbox-safe subset of Firebase APIs inside Directus Flows using outbound HTTP requests.
 
