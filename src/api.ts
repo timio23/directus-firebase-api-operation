@@ -48,8 +48,14 @@ const FCM_BASE_URL = 'https://fcm.googleapis.com/v1';
 const REMOTE_CONFIG_BASE_URL = 'https://firebaseremoteconfig.googleapis.com/v1';
 const STORAGE_BASE_URL = 'https://storage.googleapis.com/storage/v1';
 
-function parseJson<T>(value: string | undefined, fieldName: string): T | undefined {
-	if (!value || value.trim() === '') return undefined;
+function parseJson<T>(value: T | string | undefined | null, fieldName: string): T | undefined {
+	if (value === undefined || value === null) return undefined;
+
+	if (typeof value !== 'string') {
+		return value;
+	}
+
+	if (value.trim() === '') return undefined;
 
 	try {
 		return JSON.parse(value) as T;
